@@ -1,0 +1,12 @@
+_build/
+*.hex
+*.bin
+*.out
+*.map
+*.o
+*.d
+*.log
+*.zip
+*.tar
+*.tar.gz
+*.DS_Store
