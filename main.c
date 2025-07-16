@@ -661,6 +661,27 @@ static void services_init(void)
 
 }
 
+/**@brief Function for handling advertising events.
+ *
+ * @details This function will be called for advertising events which are passed to the application.
+ *
+ * @param[in] ble_adv_evt  Advertising event.
+ */
+static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
+{
+    ret_code_t err_code;
+
+    switch (ble_adv_evt)
+    {
+        case BLE_ADV_EVT_IDLE:
+            sleep_mode_enter();
+            break;
+
+        default:
+            break;
+    }
+}
+
 static void advertising_init(void)
 {
     ret_code_t             err_code;
