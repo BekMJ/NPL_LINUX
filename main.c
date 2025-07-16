@@ -102,6 +102,7 @@
 #include "ble_dis.h"
 #include "ble_srv_common.h"
 
+#define FIRMWARE_VERSION "v4.0"
 
 #define DEVICE_NAME                   "XHale Health"         /**< Name of device. Will be included in the advertising data. */
 #define SENSOR_MEAS_INTERVAL          APP_TIMER_TICKS(250)                   /**< Sensor measurement interval (ticks). */
@@ -213,18 +214,18 @@ static uint32_t              m_temp_value = 0;
 /* Indicates if operation on TWI has ended. */
 static volatile bool m_xfer_done = false;
 static ble_advdata_manuf_data_t m_manuf_data;
-static uint8_t m_device_mac[6];
-static char              m_serial_str[17];
-static ble_srv_utf8_str_t m_serial_utf8;
+// static uint8_t m_device_mac[6];
+// static char              m_serial_str[17];
+// static ble_srv_utf8_str_t m_serial_utf8;
 
 
-static void read_ble_address(void)
-{
-    ble_gap_addr_t gap_addr;
-    // pull the current BLE address (public or random) out of the SoftDevice
-    sd_ble_gap_addr_get(&gap_addr);
-    memcpy(m_device_mac, gap_addr.addr, 6);   // BLE spec orders it [0]=LSB ... [5]=MSB
-}
+// static void read_ble_address(void)
+// {
+//     ble_gap_addr_t gap_addr;
+//     // pull the current BLE address (public or random) out of the SoftDevice
+//     sd_ble_gap_addr_get(&gap_addr);
+//     memcpy(m_device_mac, gap_addr.addr, 6);   // BLE spec orders it [0]=LSB ... [5]=MSB
+// }
 
 /* global instance of temperature sensor bme280*/
 struct bme280_driver bme280; 
@@ -695,21 +696,23 @@ static void dis_init(void)
 {
     ret_code_t        err_code;
     ble_dis_init_t    dis_init;
-    ble_srv_utf8_str_t serial_utf8;
-    char               serial_str[17];   // 16 hex chars + '\0'
+    // ble_srv_utf8_str_t serial_utf8;
+    // char               serial_str[17];   // 16 hex chars + '\0'
 
     // 1. Fetch or format your serial into ASCII hex:
-    get_device_serial_string(serial_str, sizeof(serial_str));
+    // get_device_serial_string(serial_str, sizeof(serial_str));
 
     // 2. Convert ASCII C‑string into ble_srv_utf8_str_t
-    ble_srv_ascii_to_utf8(&serial_utf8, serial_str);
+    // ble_srv_ascii_to_utf8(&serial_utf8, serial_str);
 
     // 3. Zero the init struct, then assign only the serial field:
     memset(&dis_init, 0, sizeof(dis_init));
-    dis_init.serial_num_str = serial_utf8;
+    // dis_init.serial_num_str = serial_utf8;
 
-    // 4. You can leave the other ble_srv_utf8_str_t members as zero (they won't be added).
-    //    If you wanted, you could also populate manufact_name_str, model_num_str, etc.
+    // Add firmware version string
+    static char fw_rev[] = FIRMWARE_VERSION;
+    dis_init.fw_rev_str.p_str = (uint8_t *)fw_rev;
+    dis_init.fw_rev_str.length = strlen(fw_rev);
 
     // 5. Set security requirements (e.g. open read):
     dis_init.dis_char_rd_sec = SEC_OPEN;
@@ -935,8 +938,8 @@ static void advertising_init(void)
 
     // 2) Fill in your manufacturer-specific data
     m_manuf_data.company_identifier = 0x0059;      // Your Bluetooth SIG company ID
-    m_manuf_data.data.p_data        = m_device_mac;
-    m_manuf_data.data.size          = sizeof(m_device_mac);
+    // m_manuf_data.data.p_data        = m_device_mac;
+    // m_manuf_data.data.size          = sizeof(m_device_mac);
 
     // 3) Tell the advertising module about it
     init.advdata.p_manuf_specific_data     = &m_manuf_data;
@@ -1505,7 +1508,7 @@ int main(void)
     ble_stack_init();
     gap_params_init();
     gatt_init();
-    read_ble_address();
+    // read_ble_address();
     advertising_init();
     services_init();
     dis_init();    
