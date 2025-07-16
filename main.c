@@ -156,8 +156,9 @@
 #define TWI_INSTANCE_ID        0
 
 /* even if connected, after 5 mins of inactivity it disconnects*/
-#define DISCONNECT_TIMEOUT_MS 300000  // 5 minutes in milliseconds
-APP_TIMER_DEF(m_disconnect_timer_id);
+// Remove disconnect timer definition
+// #define DISCONNECT_TIMEOUT_MS 300000  // 5 minutes in milliseconds
+// APP_TIMER_DEF(m_disconnect_timer_id);
 
 
 /* TWI instance. */
@@ -451,19 +452,6 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-static void disconnect_timeout_handler(void * p_context)
-{
-    UNUSED_PARAMETER(p_context);
-    ret_code_t err_code;
-    NRF_LOG_INFO("Disconnect timer expired, disconnecting BLE connection.");
-    if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-    {
-         err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-         APP_ERROR_CHECK(err_code);
-    }
-}
-
-
 void saadc_sampling_event_enable(void)
 {
     ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
@@ -566,7 +554,6 @@ void saadc_init(void)
 
 }
 
-
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module. This creates and starts application timers.
@@ -585,14 +572,7 @@ static void timers_init(void)
                                 sensor_timeout_handler);
     APP_ERROR_CHECK(err_code);
     
-    // Create disconnect timer (new)
-    /*
-    err_code = app_timer_create(&m_disconnect_timer_id,
-                                APP_TIMER_MODE_SINGLE_SHOT,
-                                disconnect_timeout_handler);
-    APP_ERROR_CHECK(err_code);*/
 }
-
 
 /**@brief Function for the GAP initialization.
  *
@@ -626,7 +606,6 @@ static void gap_params_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
 /**@brief Function for initializing the GATT module.
  */
 static void gatt_init(void)
@@ -647,7 +626,6 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 {
     APP_ERROR_HANDLER(nrf_error);
 }
-
 
 /**@brief Function for initializing services that will be used by the application.
  *
@@ -682,252 +660,7 @@ static void services_init(void)
     APP_ERROR_CHECK(err_code);
 
 }
-static void get_device_serial_string(char * out_str, size_t max_len)
-{
-    // Read the two 32‑bit words of the factory ID
-    uint32_t id_lo = NRF_FICR->DEVICEID[0];
-    uint32_t id_hi = NRF_FICR->DEVICEID[1];
 
-    // Format as 16 hex digits: high word first, then low
-    snprintf(out_str, max_len, "%08X%08X", id_hi, id_lo);
-}
-
-static void dis_init(void)
-{
-    ret_code_t        err_code;
-    ble_dis_init_t    dis_init;
-    // ble_srv_utf8_str_t serial_utf8;
-    // char               serial_str[17];   // 16 hex chars + '\0'
-
-    // 1. Fetch or format your serial into ASCII hex:
-    // get_device_serial_string(serial_str, sizeof(serial_str));
-
-    // 2. Convert ASCII C‑string into ble_srv_utf8_str_t
-    // ble_srv_ascii_to_utf8(&serial_utf8, serial_str);
-
-    // 3. Zero the init struct, then assign only the serial field:
-    memset(&dis_init, 0, sizeof(dis_init));
-    // dis_init.serial_num_str = serial_utf8;
-
-    // Add firmware version string
-    static char fw_rev[] = FIRMWARE_VERSION;
-    dis_init.fw_rev_str.p_str = (uint8_t *)fw_rev;
-    dis_init.fw_rev_str.length = strlen(fw_rev);
-
-    // 5. Set security requirements (e.g. open read):
-    dis_init.dis_char_rd_sec = SEC_OPEN;
-
-    // 6. Initialize the Device Information Service:
-    err_code = ble_dis_init(&dis_init);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-
-/**@brief Function for starting application timers.
- */
-static void application_timers_start(void)
-{
-    ret_code_t err_code;
-
-    // Start application timers.
-    err_code = app_timer_start(m_sensor_timer_id, SENSOR_MEAS_INTERVAL, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling the Connection Parameter events.
- *
- * @details This function will be called for all events in the Connection Parameters Module which
- *          are passed to the application.
- *          @note All this function does is to disconnect. This could have been done by simply
- *                setting the disconnect_on_fail configuration parameter, but instead we use the
- *                event handler mechanism to demonstrate its use.
- *
- * @param[in]   p_evt   Event received from the Connection Parameters Module.
- */
-static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
-{
-    ret_code_t err_code;
-
-    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
-    {
-        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-        APP_ERROR_CHECK(err_code);
-    }
-}
-
-
-/**@brief Function for handling a Connection Parameters error.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
- */
-static void conn_params_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
-/**@brief Function for initializing the Connection Parameters module.
- */
-static void conn_params_init(void)
-{
-    uint32_t               err_code;
-    ble_conn_params_init_t connection_params_init;
-
-    memset(&connection_params_init, 0, sizeof(connection_params_init));
-
-    connection_params_init.p_conn_params                  = NULL;
-    connection_params_init.first_conn_params_update_delay = FIRST_CONN_UPDATE_DELAY;
-    connection_params_init.next_conn_params_update_delay  = NEXT_CONN_UPDATE_DELAY;
-    connection_params_init.max_conn_params_update_count   = MAX_CONN_UPDATE_COUNT;
-    connection_params_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
-    connection_params_init.disconnect_on_fail             = false;
-    connection_params_init.evt_handler                    = on_conn_params_evt;
-    connection_params_init.error_handler                  = conn_params_error_handler;
-
-    err_code = ble_conn_params_init(&connection_params_init);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-
-/**@brief Function for putting the chip into sleep mode.
- *
- * @note This function will not return.
- */
-static void sleep_mode_enter(void)
-{
-
-    //nrf_gpio_pin_write(POWER_SWITCH_PIN, POWER_SWITCH_OFF);
-    nrf_gpio_cfg_sense_input(WAKE_SWITCH_PIN, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_SENSE_HIGH);
-    flash_page_close();
-    
-    // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    ret_code_t err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling advertising events.
- *
- * @details This function will be called for advertising events which are passed to the application.
- *
- * @param[in] ble_adv_evt  Advertising event.
- */
-static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
-{
-    ret_code_t err_code;
-
-    switch (ble_adv_evt)
-    {
-        case BLE_ADV_EVT_IDLE:
-            sleep_mode_enter();
-            break;
-
-        default:
-            break;
-    }
-}
-
-
-/**@brief Function for handling BLE events.
- *
- * @param[in]   p_ble_evt   Bluetooth stack event.
- * @param[in]   p_context   Unused.
- */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
-{
-    ret_code_t err_code = NRF_SUCCESS;
-
-    switch (p_ble_evt->header.evt_id)
-    {
-        case BLE_GAP_EVT_CONNECTED:
-            APP_ERROR_CHECK(err_code);
-            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
-            APP_ERROR_CHECK(err_code);
-            
-            saadc_sampling_event_enable();
-            // Start the disconnect timer for 5 minutes.
-            /*
- 		err_code = app_timer_start(m_disconnect_timer_id, APP_TIMER_TICKS(DISCONNECT_TIMEOUT_MS), NULL);
-                APP_ERROR_CHECK(err_code); */
-
-            break;
-
-        case BLE_GAP_EVT_DISCONNECTED:
-            m_conn_handle               = BLE_CONN_HANDLE_INVALID;
-            m_bps_meas_ind_conf_pending = false;
-            
-                // Stop disconnect timer if running.
-    		app_timer_stop(m_disconnect_timer_id);
-            
-            sleep_mode_enter();
-            
-            break;
-
-        case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
-        {
-            ble_gap_phys_t const phys =
-            {
-                .rx_phys = BLE_GAP_PHY_AUTO,
-                .tx_phys = BLE_GAP_PHY_AUTO,
-            };
-            err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
-            APP_ERROR_CHECK(err_code);
-        } break;
-
-        case BLE_GATTC_EVT_TIMEOUT:
-            // Disconnect on GATT Client timeout event.
-            err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
-                                             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            APP_ERROR_CHECK(err_code);
-            break;
-
-        case BLE_GATTS_EVT_TIMEOUT:
-            // Disconnect on GATT Server timeout event.
-            err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
-                                             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            APP_ERROR_CHECK(err_code);
-            break;
-
-        default:
-            // No implementation needed.
-            break;
-    }
-}
-
-
-/**@brief Function for initializing the BLE stack.
- *
- * @details Initializes the SoftDevice and the BLE event interrupt.
- */
-static void ble_stack_init(void)
-{
-    ret_code_t err_code;
-
-    err_code = nrf_sdh_enable_request();
-    APP_ERROR_CHECK(err_code);
-
-    // Configure the BLE stack using the default settings.
-    // Fetch the start address of the application RAM.
-    uint32_t ram_start = 0;
-    err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
-    APP_ERROR_CHECK(err_code);
-
-    // Enable BLE stack.
-    err_code = nrf_sdh_ble_enable(&ram_start);
-    APP_ERROR_CHECK(err_code);
-
-    // Register a handler for BLE events.
-    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
-}
-
-/**@brief Function for initializing the Advertising functionality.
- *
- * @details Sets the BLE advertising transmission power (-40 dB is lowest setting)
- */
 static void advertising_init(void)
 {
     ret_code_t             err_code;
@@ -936,15 +669,15 @@ static void advertising_init(void)
     // 1) Zero the init struct
     memset(&init, 0, sizeof(init));
 
-    // 2) Fill in your manufacturer-specific data
-    m_manuf_data.company_identifier = 0x0059;      // Your Bluetooth SIG company ID
+    // 2) Simple advertising like the old working code - no manufacturer data
+    // m_manuf_data.company_identifier = 0x0059;      // Your Bluetooth SIG company ID
     // m_manuf_data.data.p_data        = m_device_mac;
     // m_manuf_data.data.size          = sizeof(m_device_mac);
 
     // 3) Tell the advertising module about it
-    init.advdata.p_manuf_specific_data     = &m_manuf_data;
+    // init.advdata.p_manuf_specific_data     = &m_manuf_data;
 
-    // 4) The rest of your advertising payload
+    // 4) The rest of your advertising payload - simplified
     init.advdata.name_type                 = BLE_ADVDATA_FULL_NAME;
     init.advdata.include_appearance        = true;
     init.advdata.flags                     = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
