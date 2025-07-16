@@ -661,6 +661,26 @@ static void services_init(void)
 
 }
 
+static void dis_init(void)
+{
+    ret_code_t        err_code;
+    ble_dis_init_t    dis_init;
+
+    memset(&dis_init, 0, sizeof(dis_init));
+
+    // Add firmware version string
+    static char fw_rev[] = FIRMWARE_VERSION;
+    dis_init.fw_rev_str.p_str = (uint8_t *)fw_rev;
+    dis_init.fw_rev_str.length = strlen(fw_rev);
+
+    // Set security requirements (e.g. open read):
+    dis_init.dis_char_rd_sec = SEC_OPEN;
+
+    // Initialize the Device Information Service:
+    err_code = ble_dis_init(&dis_init);
+    APP_ERROR_CHECK(err_code);
+}
+
 /**@brief Function for handling advertising events.
  *
  * @details This function will be called for advertising events which are passed to the application.
@@ -768,6 +788,101 @@ static void idle_state_handle(void)
     if (NRF_LOG_PROCESS() == false)
     {
         nrf_pwr_mgmt_run();
+    }
+}
+
+/**@brief Function for putting the chip into sleep mode.
+ *
+ * @note This function will not return.
+ */
+static void sleep_mode_enter(void)
+{
+
+    //nrf_gpio_pin_write(POWER_SWITCH_PIN, POWER_SWITCH_OFF);
+    nrf_gpio_cfg_sense_input(WAKE_SWITCH_PIN, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_SENSE_HIGH);
+    flash_page_close();
+    
+    // Go to system-off mode (this function will not return; wakeup will cause a reset).
+    ret_code_t err_code = sd_power_system_off();
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for initializing the BLE stack.
+ *
+ * @details Initializes the SoftDevice and the BLE event interrupt.
+ */
+static void ble_stack_init(void)
+{
+    ret_code_t err_code;
+
+    err_code = nrf_sdh_enable_request();
+    APP_ERROR_CHECK(err_code);
+
+    // Configure the BLE stack using the default settings.
+    // Fetch the start address of the application RAM.
+    uint32_t ram_start = 0;
+    err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
+    APP_ERROR_CHECK(err_code);
+
+    // Enable BLE stack.
+    err_code = nrf_sdh_ble_enable(&ram_start);
+    APP_ERROR_CHECK(err_code);
+
+    // Register a handler for BLE events.
+    NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
+}
+
+/**@brief Function for initializing the Connection Parameters module.
+ */
+static void conn_params_init(void)
+{
+    uint32_t               err_code;
+    ble_conn_params_init_t connection_params_init;
+
+    memset(&connection_params_init, 0, sizeof(connection_params_init));
+
+    connection_params_init.p_conn_params                  = NULL;
+    connection_params_init.first_conn_params_update_delay = FIRST_CONN_UPDATE_DELAY;
+    connection_params_init.next_conn_params_update_delay  = NEXT_CONN_UPDATE_DELAY;
+    connection_params_init.max_conn_params_update_count   = MAX_CONN_UPDATE_COUNT;
+    connection_params_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
+    connection_params_init.disconnect_on_fail             = false;
+    connection_params_init.evt_handler                    = on_conn_params_evt;
+    connection_params_init.error_handler                  = conn_params_error_handler;
+
+    err_code = ble_conn_params_init(&connection_params_init);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for starting application timers.
+ */
+static void application_timers_start(void)
+{
+    ret_code_t err_code;
+
+    // Start application timers.
+    err_code = app_timer_start(m_sensor_timer_id, SENSOR_MEAS_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+/**@brief Function for handling advertising events.
+ *
+ * @details This function will be called for advertising events which are passed to the application.
+ *
+ * @param[in] ble_adv_evt  Advertising event.
+ */
+static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
+{
+    ret_code_t err_code;
+
+    switch (ble_adv_evt)
+    {
+        case BLE_ADV_EVT_IDLE:
+            sleep_mode_enter();
+            break;
+
+        default:
+            break;
     }
 }
 
