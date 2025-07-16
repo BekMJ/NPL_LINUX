@@ -832,6 +832,72 @@ static void ble_stack_init(void)
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIO, ble_evt_handler, NULL);
 }
 
+/**@brief Function for handling BLE events.
+ *
+ * @param[in]   p_ble_evt   Bluetooth stack event.
+ * @param[in]   p_context   Unused.
+ */
+static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
+{
+    ret_code_t err_code = NRF_SUCCESS;
+
+    switch (p_ble_evt->header.evt_id)
+    {
+        case BLE_GAP_EVT_CONNECTED:
+            APP_ERROR_CHECK(err_code);
+            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+            err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
+            APP_ERROR_CHECK(err_code);
+            
+            saadc_sampling_event_enable();
+            // Remove disconnect timer start
+            // err_code = app_timer_start(m_disconnect_timer_id, APP_TIMER_TICKS(DISCONNECT_TIMEOUT_MS), NULL);
+            // APP_ERROR_CHECK(err_code);
+
+            break;
+
+        case BLE_GAP_EVT_DISCONNECTED:
+            m_conn_handle               = BLE_CONN_HANDLE_INVALID;
+            m_bps_meas_ind_conf_pending = false;
+            
+            // Remove disconnect timer stop
+            // app_timer_stop(m_disconnect_timer_id);
+            
+            sleep_mode_enter();
+            
+            break;
+
+        case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
+        {
+            ble_gap_phys_t const phys =
+            {
+                .rx_phys = BLE_GAP_PHY_AUTO,
+                .tx_phys = BLE_GAP_PHY_AUTO,
+            };
+            err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
+            APP_ERROR_CHECK(err_code);
+        } break;
+
+        case BLE_GATTC_EVT_TIMEOUT:
+            // Disconnect on GATT Client timeout event.
+            err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
+                                             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        case BLE_GATTS_EVT_TIMEOUT:
+            // Disconnect on GATT Server timeout event.
+            err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
+                                             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
 /**@brief Function for handling the Connection Parameter events.
  *
  * @details This function will be called for all events in the Connection Parameters Module which
